@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head>
+  <meta charset="UTF-8">
+  <title>RMR Assessoria Contábil - Gestão de Tarefas</title>
+  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin=""></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin=""></script>
+  <script src="https://unpkg.com/@babel/standalone@7.21.0/babel.min.js"></script>
+  <style>
+    body { margin: 0; padding: 0; background-color: #F8F7F4; }
+  </style>
+<meta id="dcngeagmmhegagicpcmpinaoklddcgon"></head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+// ─── SUPABASE ─────────────────────────────────────────────────────────────────
+const SUPA_URL = "https://dekdeotdfzhfyyxcmbvc.supabase.co";
+// ⚠️ Substitua pelo valor real da anon key do seu projeto Supabase
+// (Dashboard → Settings → API → "anon public" — começa com "eyJ...")
+// ⚠️ ATENÇÃO: Substitua pelo valor real da anon key do seu projeto Supabase
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRla2Rlb3RkZnpoZnl5eGNtYnZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MDk4MzksImV4cCI6MjA5MjM4NTgzOX0.VLWyQkGBjXa9oa-TioWbCkzWh8zMZ6gJTu4u6N9qdwM";
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// ─── DADOS INICIAIS ────────────────────────────────────────────────────────────
+const INITIAL_DATA = {
+  DP: {
+    label: "Depto. Pessoal", color: "#1D6FA4", bg: "#E6F1FB",
+    tasks: [
+      { id: "dp1", name: "Folha de Ponto", subtasks: [], recorrencia: "Mensal" },
+      { id: "dp2", name: "Folha de Pagamento", subtasks: ["E-Social", "DCTFWeb", "EFD-Reinf"], recorrencia: "Mensal" },
+      { id: "dp3", name: "Folha de Adiantamento", subtasks: [], recorrencia: "Mensal" },
+      { id: "dp4", name: "Admissão / Demissão", subtasks: ["Ficha de Registro"], recorrencia: "Avulso" },
+      { id: "dp5", name: "Alteração", subtasks: [], recorrencia: "Avulso" },
+    ],
+  },
+  FISCAL: {
+    label: "Fiscal", color: "#0F6E56", bg: "#E1F5EE",
+    tasks: [
+      { id: "fi1", name: "Escrituração de Notas Fiscais", subtasks: [], recorrencia: "Mensal" },
+      { id: "fi2", name: "Apuração — Simples Nacional", subtasks: ["PGDAS", "Declaração", "Extrato", "Recibo"], recorrencia: "Mensal" },
+      { id: "fi3", name: "Apuração — RPA", subtasks: ["ISS", "ICMS", "PIS", "COFINS", "CSLL", "IRPJ"], recorrencia: "Mensal" },
+      { id: "fi4", name: "Obrigações Acessórias", subtasks: ["EFD-Reinf", "MIT", "EFD-Contribuições PIS/COFINS", "EFD-ICMS/IPI", "ECD", "ECF"], recorrencia: "Anual" },
+    ],
+  },
+  CONTABIL: {
+    label: "Contábil", color: "#7F77DD", bg: "#EEEDFE",
+    tasks: [
+      { id: "co1", name: "Escrituração Contábil", subtasks: [], recorrencia: "Mensal" },
+      { id: "co2", name: "Geração de Relatórios", subtasks: [], recorrencia: "Mensal" },
+    ],
+  },
+  SOCIETARIO: {
+    label: "Societário", color: "#993C1D", bg: "#FAECE7",
+    tasks: [
+      { id: "so1", name: "Abertura / Encerramento", subtasks: [], recorrencia: "Avulso" },
+      { id: "so2", name: "Contratos / Propostas", subtasks: [], recorrencia: "Avulso" },
+      { id: "so3", name: "Cadastros", subtasks: [], recorrencia: "Avulso" },
+    ],
+  },
+  IRPF: {
+    label: "IRPF", color: "#1A6B8A", bg: "#E3F2F9",
+    tasks: [
+      { id: "ir1", name: "Declaração IRPF", subtasks: [], recorrencia: "Anual" },
+      { id: "ir2", name: "Emissão de Quotas/DARF", subtasks: [], recorrencia: "Avulso" },
+    ],
+  },
+  FINANCEIRO: {
+    label: "Financeiro", color: "#6B4F1A", bg: "#FAF3E7",
+    tasks: [
+      { id: "fin1", name: "Contas a Pagar", subtasks: [], recorrencia: "Mensal" },
+      { id: "fin2", name: "Contas a Receber", subtasks: [], recorrencia: "Mensal" },
+      { id: "fin3", name: "Fluxo de Caixa", subtasks: [], recorrencia: "Mensal" },
+      { id: "fin4", name: "Conciliação Bancária", subtasks: [], recorrencia: "Mensal" },
+      { id: "fin5", name: "Emissão de Boletos", subtasks: [], recorrencia: "Avulso" },
+    ],
+  },
+};
+
+// ─── CONSTANTES ────────────────────────────────────────────────────────────────
+const RECORRENCIAS = ["Diária", "Semanal", "Mensal", "Anual", "Avulso"];
+
+const REC_COLORS = {
+  Diária:    { bg: "#FCEBEB", color: "#A32D2D", border: "#F09595" },
+  Semanal:   { bg: "#EAF3DE", color: "#3B6D11", border: "#97C459" },
+  Mensal:    { bg: "#E6F1FB", color: "#185FA5", border: "#85B7EB" },
+  Anual:     { bg: "#EEEDFE", color: "#534AB7", border: "#AFA9EC" },
+  Avulso:    { bg: "#F1EFE8", color: "#5F5E5A", border: "#B4B2A9" },
+  Periódico: { bg: "#FAECE7", color: "#993C1D", border: "#F0997B" },
+};
+
+const STATUS = { pending: "Pendente", in_progress: "Em andamento", done: "Concluída", cancelled: "Cancelada" };
+const STATUS_CFG = {
+  pending:     { bg: "#F1EFE8", color: "#5F5E5A", border: "#B4B2A9" },
+  in_progress: { bg: "#FAEEDA", color: "#854F0B", border: "#EF9F27" },
+  done:        { bg: "#EAF3DE", color: "#3B6D11", border: "#97C459" },
+  cancelled:   { bg: "#FCEBEB", color: "#A32D2D", border: "#F09595" },
+};
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function prazoInfo(prazo) {
+  if (!prazo) return null;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const d = new Date(prazo + "T00:00:00");
+  const diff = Math.round((d - hoje) / 86400000);
+  if (diff < 0)   return { label: `Vencida há ${Math.abs(diff)} dia(s)`, level: "vencida",  bg: "#FCEBEB", color: "#A32D2D", border: "#F09595" };
+  if (diff === 0) return { label: "Vence hoje!",                          level: "hoje",     bg: "#FAEEDA", color: "#854F0B", border: "#EF9F27" };
+  if (diff <= 3)  return { label: `Vence em ${diff} dia(s)`,              level: "urgente",  bg: "#FAEEDA", color: "#854F0B", border: "#EF9F27" };
+  if (diff <= 7)  return { label: `Vence em ${diff} dia(s)`,              level: "proximo",  bg: "#E6F1FB", color: "#185FA5", border: "#85B7EB" };
+  return           { label: `Prazo: ${fmtDate(prazo)}`,                   level: "ok",       bg: "#EAF3DE", color: "#3B6D11", border: "#97C459" };
+}
+
+function fmtDate(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+function mesAtual() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+}
+
+function proximoPrazo(prazo, recorrencia) {
+  if (!prazo) return "";
+  const [ano, mes, dia] = prazo.split("-").map(Number);
+  if (recorrencia === "Diária") {
+    const d = new Date(ano, mes - 1, dia);
+    d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+  if (recorrencia === "Semanal") {
+    const d = new Date(ano, mes - 1, dia);
+    d.setDate(d.getDate() + 7);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+  if (recorrencia === "Mensal") {
+    const novoMes = mes === 12 ? 1 : mes + 1;
+    const novoAno = mes === 12 ? ano + 1 : ano;
+    const maxDia  = new Date(novoAno, novoMes, 0).getDate();
+    return `${novoAno}-${String(novoMes).padStart(2,"0")}-${String(Math.min(dia, maxDia)).padStart(2,"0")}`;
+  }
+  if (recorrencia === "Anual") {
+    return `${ano + 1}-${String(mes).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;
+  }
+  return prazo;
+}
+
+function buildInitialTasks() {
+  const saved = localStorage.getItem("rmr_tasks_v8");
+  if (saved) { try { return JSON.parse(saved); } catch {} }
+  const tasks = [];
+  const mes = mesAtual();
+  Object.entries(INITIAL_DATA).forEach(([setor, data]) => {
+    data.tasks.forEach((t) => {
+      tasks.push({
+        id: t.id, setor, name: t.name, subtasks: t.subtasks,
+        recorrencia: t.recorrencia, status: "pending",
+        responsavel: "", observacao: "", competencia: mes, prazo: "",
+        criado: new Date().toISOString(),
+      });
+    });
+  });
+  IMPORTED_TASKS.forEach((t) => tasks.push(t));
+  return tasks;
+}
+
+const IMPORTED_TASKS = [
+  { id: "imp_0", setor: "IRPF", name: "IRPF - ANTONIA NASCIMENTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_1", setor: "FISCAL", name: "84 - COMERCIAL 5A - HONORÁRIOS CONTÁBEIS R$ 50,00 EMITIR", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_2", setor: "DP", name: "84 - COMERCIAL 5A - AVISO E RECIBO DE FÉRIAS JULIANA TAVARES 11/05/2026", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_3", setor: "DP", name: "85 - ASSOCIACAO AMIGOS DE PIANORO - SIMULAÇÃO DA RESCISÃO AVISO PRÉVIO INDENIZADO E TRABALHADO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_4", setor: "DP", name: "85 - ASSOCIACAO AMIGOS DE PIANORO - ADMISSÃO JAQUELINE DOS SANTOS BISPO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_5", setor: "DP", name: "04 - DEPOSITO DE MATERIAIS - ENCERRAMENTO DO CONTRATO DE TRABALHO CHIRLAN", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_6", setor: "SOCIETARIO", name: "CRETA - CADASTRAR NO SISTEMA MGC", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_7", setor: "DP", name: "4 - MATERIAIS DE CONSTRUÇÃO - RESCISÃO DE CONTRATO - CHIRLAN", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_8", setor: "SOCIETARIO", name: "BAIXAR OS DOCUMENTOS PENDENTES NAS PASTAS PAREI 53...", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_9", setor: "DP", name: "84 - COMERCIAL 5A - ADIANTAMENTO VALE", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_10", setor: "FISCAL", name: "MEI DANIEL SANTOS ANGELO - SIMULAÇÃO PARCELAMENTO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_11", setor: "SOCIETARIO", name: "63 - ISRAEL AUTO PEÇAS E SERVIÇOS LTDA - EXPIRAÇÃO DO CERTIFICADO DIGITAL 09/05/2026", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_12", setor: "SOCIETARIO", name: "85 - ASSOCIACAO AMIGOS DE PIANORO - CONTRATO DE PRESTAÇÃO DE SERVIÇOS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_13", setor: "DP", name: "85 - ASSOCIACAO AMIGOS DE PIANORO - CADASTRAR OS COLABORADORES", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_14", setor: "DP", name: "85 - ASSOCIACAO AMIGOS DE PIANORO - FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_15", setor: "DP", name: "56 - CASA DE CARNES - FGTS RECALCULO (PAGAMENTOS PENDENTES E ENVIAR PELA MANHÃ AS GUIAS PARA CLIENTE PAGAR)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_16", setor: "SOCIETARIO", name: "40 - JMA ELETRIC COM - CONSULTAR PROTOCOLO DA JUCESP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_17", setor: "IRPF", name: "IRPF MARIA CRUZ SOUZA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_18", setor: "IRPF", name: "IRPF GINALDO CRUZ SOUZA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_19", setor: "SOCIETARIO", name: "PROCESSO EMPRESA DO ALAN NAÇÃO SANTA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_20", setor: "DP", name: "63 - ISRAEL - FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_21", setor: "FISCAL", name: "81 - LE BRU CONFEITARIA - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_22", setor: "FISCAL", name: "79 - FERAJOYS CONSULTORIA - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_23", setor: "FISCAL", name: "78 - WRAYFF COMERCIO - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_24", setor: "DP", name: "64 - SERGIO NUNES - FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_25", setor: "FISCAL", name: "82 - LUCAS DA S. PEIXOTO - ESCRITURAR NOTAS FISCAL DAS COMP. 01, 02 E 03", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_26", setor: "DP", name: "48 - TENDTUDO CELL - ENCERRAMENTO DO CONTRATO DE PRESTAÇÃO DOS SERVIÇOS CONTÁBEIS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_27", setor: "SOCIETARIO", name: "38 - DELAMUTA - LANÇAR DOCUMENTAÇÃO CONTÁBIL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_28", setor: "DP", name: "45 - MM ALVES ENGENHHARIA - ENCERRAMENTO DO CONTRATO DE PRESTAÇÃO DOS SERVIÇOS CONTÁBEIS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_29", setor: "SOCIETARIO", name: "REUNIÃO PATRÍCIA 14H00", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_30", setor: "IRPF", name: "IRPF NORALDINO JOSE DE SOUZA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_31", setor: "DP", name: "04 - DEPOSITO DE MATERIAIS - ENCERRAMENTO DO CONTRATO DE TRABALHO JOSE BENEDITO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_32", setor: "SOCIETARIO", name: "82 - LUCAS DA S. PEIXOTO - ALTERAÇÃO CONTRATUAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_33", setor: "IRPF", name: "IRPF EUCLIDES ALVES DA SILVA FILHO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_34", setor: "FISCAL", name: "40 - JMA ELETRIC COM. - IR ATÉ A CAIXA E CADASTRAR A EMPRESA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_35", setor: "FISCAL", name: "42 - ADEGA E CIA - IR ATÉ A CAIXA E CADASTRAR A EMPRESA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_36", setor: "IRPF", name: "IRPF MARIA FERREIRA SANTOS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_37", setor: "IRPF", name: "IRPF JOELMA DE JESUS SANTOS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_38", setor: "IRPF", name: "IRPF SIMONE FERREIRA DOS SANTOS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_39", setor: "IRPF", name: "IRPF MÁRCIO APDO DOS SANTOS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_40", setor: "SOCIETARIO", name: "FLAT INDUSTRIA - LICENCIAMENTO (CLI)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_41", setor: "DP", name: "84 - COMERCIAL 5A - FOLHA DE PONTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_42", setor: "FISCAL", name: "47 - F.J. CONSTRUÇÃO - TAXA DE FISCALIZAÇÃO TFE", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_43", setor: "DP", name: "84 - COMERCIAL 5A - 1° PARCELA 13° SALÁRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_44", setor: "FISCAL", name: "84 - COMERCIAL 5A - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_45", setor: "FISCAL", name: "84 - COMERCIAL 5A - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_46", setor: "FISCAL", name: "84 - COMERCIAL 5A - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_47", setor: "SOCIETARIO", name: "47 - F.J. CONSTRUÇÃO - INFORMAR A PREFEITURA SP DE FRANCO DA ROCHA A MUDANÇA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_48", setor: "FISCAL", name: "59 - MOTTAIT - ACORDOS EMITIR OS PARCELAMENTOS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_49", setor: "SOCIETARIO", name: "31 - RMR ASS. PAGAR CONTAS ESCRITÓRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_50", setor: "FISCAL", name: "MEI MARIA LUCICLEIDE G. DA SILVA - ACORDO SIMEI PARCELAMENTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_51", setor: "FISCAL", name: "83 - NAZARI SUSHI - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_52", setor: "FISCAL", name: "83 - NAZARI SUSHI - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_53", setor: "DP", name: "83 - NAZARI SUSHI - FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_54", setor: "FISCAL", name: "83 - NAZARI SUSHI - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_55", setor: "FISCAL", name: "83 - NAZARI SUSHI - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_56", setor: "DP", name: "83 - NAZARI SUSHI - 1° PARCELA 13° SALÁRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_57", setor: "FISCAL", name: "82 - LUCAS DA S. PEIXOTO - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_58", setor: "FISCAL", name: "82 - LUCAS DA S. PEIXOTO - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_59", setor: "DP", name: "82 - LUCAS DA S. PEIXOTO - FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_60", setor: "FISCAL", name: "82 - LUCAS DA S. PEIXOTO - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_61", setor: "FISCAL", name: "82 - LUCAS DA S. PEIXOTO - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_62", setor: "DP", name: "82 - LUCAS DA S. PEIXOTO - 1° PARCELA 13° SALÁRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_63", setor: "SOCIETARIO", name: "83 - NAZARI SUSHI - ALTERAÇÃO CONTRATUAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_64", setor: "DP", name: "61 - NELSON GOMES FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_65", setor: "DP", name: "04 - DEPOSITO DE MATERIAIS - FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_66", setor: "DP", name: "42 - ADEGA DR - FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_67", setor: "DP", name: "47 - F.J. CONSTRUÇÃO - FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_68", setor: "FISCAL", name: "22 - RJS EMP. - EMITIR PROTOCOLO E LIBERAR DOCUMENTOS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_69", setor: "SOCIETARIO", name: "MEI EDIUCE - EMISSÃO DO CONTRATO DE PRESTAÇÃO DE SERVIÇOS ENCERRAMENTO DO CNPJ", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_70", setor: "CONTABIL", name: "LANÇAMENTOS CONTÁBEIS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_71", setor: "FISCAL", name: "70 - IDAILSON PEREIRA - TAXA DE FISCALIZAÇÃO DE FUNCIONAMENTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_72", setor: "DP", name: "63 - ISRAEL AUTO PEÇAS - RELATÓRIO DE FÉRIAS COLABORADOR ANGELA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_73", setor: "DP", name: "61 - NELSON GOMES - RELATÓRIO DE FÉRIAS COLABORADOR JUNIOR", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_74", setor: "DP", name: "47 - F. J. CONSTRUÇÃO E MÃO DE OBRA - RELATÓRIO DE FÉRIAS COLABORADOR GEZIEL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_75", setor: "DP", name: "51 - PARADA DAS EMBALAGENS - RELATÓRIO DE FÉRIAS - COLABORADOR SEVERINO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_76", setor: "DP", name: "04 - MATERIAL DE CONSTRUÇÃO - RELATÓRIO DE FÉRIAS - COLABORADORA MARIA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_77", setor: "DP", name: "78 - WRAYFF RELATÓRIO DE FÉRIAS - COLABORADOR EDUARDO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_78", setor: "DP", name: "42 - ADEGA RELATÓRIO DE FÉRIAS - COLABORADOR JONATHAN", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_79", setor: "SOCIETARIO", name: "31 - RMR ASS. PAGAR CONTAS ESCRITÓRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_80", setor: "DP", name: "69 - DINÂMICA CONS. - FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_81", setor: "SOCIETARIO", name: "SIMULAÇÃO DA APOSENTADORIA DA RESPONSÁVEL CHRISLIMP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_82", setor: "DP", name: "56 CASA DE CARNES 2ª PARCELA 13º SALÁRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_83", setor: "SOCIETARIO", name: "81 - LE BRU CONF. - PROCESSO DE ALTERAÇÃO DE ESTADO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_84", setor: "SOCIETARIO", name: "YAH GLASSES - EFETUAR O LEVANTAMENTO DOS DÉBITOS E ENCERRAR", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_85", setor: "SOCIETARIO", name: "10 - ASSOCIAÇÃO BENEF. DOANDO SONHOS - CONSULTAR PROCESSO DO CARTÓRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_86", setor: "DP", name: "61 - NELSON GOMES - 1° PARCELA 13° SALÁRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_87", setor: "DP", name: "51 PARADA DAS EMBALAGENS - 1° PARCELA 13° SALÁRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_88", setor: "DP", name: "04 - DEPOSITO DE MATERIAIS - 1° PARCELA 13° SALÁRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_89", setor: "DP", name: "63 ISRAEL AUTO PEÇAS - 1° PARCELA 13° SALÁRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_90", setor: "DP", name: "78 WRAYFF COMERCIO - 1° PARCELA 13° SALÁRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_91", setor: "DP", name: "56 CASA DE CARNES - 1° PARCELA 13° SALÁRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_92", setor: "DP", name: "42 ADEGA & CIA DR - 1° PARCELA 13° SALÁRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_93", setor: "FISCAL", name: "66 - JMA ELETRIC MAT. - MENSALIDADE ADICIONAL ANUAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_94", setor: "FISCAL", name: "40 - JMA ELETRIC - MENSALIDADE ADICIONAL ANUAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_95", setor: "FISCAL", name: "37 - CHRISLIMP - MENSALIDADE ADICIONAL ANUAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_96", setor: "FISCAL", name: "63 - ISRAEL AUTO PEÇAS E SERVIÇOS LTDA - MENSALIDADE ADICIONAL ANUAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_97", setor: "FISCAL", name: "72 - TAISE MARIA DA SILVA - ACORDO SIMPLES NACIONAL PARCELAMENTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_98", setor: "DP", name: "31 - RMR ASS. - EMITIR BOLETOS REFERENTE AO 13° SALÁRIO 2° PARCELA ESCRITÓRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_99", setor: "DP", name: "31 - RMR ASS. - EMITIR BOLETOS REFERENTE AO 13° SALÁRIO 1° PARCELA ESCRITÓRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_100", setor: "FISCAL", name: "42 - ADEGA DR - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_101", setor: "SOCIETARIO", name: "CRETA - DISTRATO DA EMPRESA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_102", setor: "CONTABIL", name: "31 - RMR ASS. - FECHAMENTO FINANCEIRO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_103", setor: "FISCAL", name: "74 - R.J.N. SERVIÇOS - BAIXAR AS NOTAS FISCAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_104", setor: "FISCAL", name: "49 - IGREJA BATISTA REN. JD. PAULISTANO - ENVIAR BOLETOS HONORÁRIOS CONTÁBEIS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_105", setor: "SOCIETARIO", name: "ENQUADRAMENTO SINDICAL DAS EMPRESAS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_106", setor: "FISCAL", name: "81 - LE BRU CONF. - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_107", setor: "FISCAL", name: "81 - LE BRU CONF. - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_108", setor: "FISCAL", name: "59 - MOTTAIT - EMISSÃO DE NOTA FISCAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_109", setor: "FISCAL", name: "72 - TAISE MARIA DA SILVA - ENVIAR BOLETO HONORÁRIOS CONTÁBEIS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_110", setor: "FISCAL", name: "65 - ALVES PROJETOS - ACORDO SIMPLES NACIONAL PARCELAMENTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_111", setor: "FISCAL", name: "59 - MOTTAIT - EMISSÃO DOS IMPOSTOS (PIS/COFINS (25) IRPJ/CSSL TRIMESTRAL(30)) - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_112", setor: "FISCAL", name: "59 - MOTTAIT - MIT MENSAL - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_113", setor: "FISCAL", name: "59 - MOTTAIT - EFD -CONTRIBUIÇÃO - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_114", setor: "DP", name: "42 - ADEGA E CIA DR - ADIANTAMENTO VALE", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_115", setor: "FISCAL", name: "79 - FERAJOYS CONS. - EMISSÃO DA TFE TAXA FISCALIZAÇÃO DE ESTABELECIMENTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_116", setor: "FISCAL", name: "79 - FERAJOYS CONS. - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_117", setor: "FISCAL", name: "79 - FERAJOYS CONS. - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_118", setor: "DP", name: "53 - MATHEUS BARROS - ANALISAR PLANILHA FOLHA DE PAGTO FATOR R", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_119", setor: "SOCIETARIO", name: "72 - TAISE MARIA DA SILVA - NOVA SOLICITAÇÃO DBE E NOVO PROCESSO E-CAC", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_120", setor: "DP", name: "78 - WRAYFF COM. - FOLHA DE PONTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_121", setor: "DP", name: "78 - WRAYFF COM. - ADIANTAMENTO VALE", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_122", setor: "SOCIETARIO", name: "50 - COM. CRISTA EDIF. VIDAS - PROCESSO DE ALTERAÇÃO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_123", setor: "DP", name: "42 - ADEGA&DR FOLHA DE PONTO/VALE TRANSPORTE/VALE REFEIÇÃO/VALE ASSIDUIDADE", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_124", setor: "FISCAL", name: "40 - JMA ELETRIC - ACORDO SIMPLES NACIONAL PARCELAMENTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_125", setor: "DP", name: "78 - WRAYFF COM. - EMITIR RELATÓRIO DE FÉRIAS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_126", setor: "FISCAL", name: "78 - WRAYFF COM. - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_127", setor: "FISCAL", name: "78 - WRAYFF COM. - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_128", setor: "DP", name: "78 - WRAYFF COM. - FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_129", setor: "FISCAL", name: "50 - COM. CRISTA EDIF. VIDAS - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_130", setor: "FISCAL", name: "49 - IGREJA BATISTA REN. JD. PAULISTANO - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_131", setor: "FISCAL", name: "30 - ASSOCIAÇÃO REVOLUÇÃO INICIATIVA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_132", setor: "FISCAL", name: "27 - ASSOCIAÇÃO PROJETO ALMAS ARREP. VOS - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_133", setor: "FISCAL", name: "10 - ASSOCIAÇÃO BENEF. DOANDO SONHOS - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_134", setor: "FISCAL", name: "9 - COMUNIDADE APOST. PARA NAÇÕES - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_135", setor: "FISCAL", name: "66 - JMA ELETRIC MATÉRIAIS ELÉTRICOS LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_136", setor: "FISCAL", name: "59 - MOTTAIT LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_137", setor: "FISCAL", name: "58 - NAÇÃO SANTA UNIFORMES E BRINDES - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_138", setor: "FISCAL", name: "52 - AUTO CAR TOMAZRAYFF PEÇAS E SERV. LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_139", setor: "FISCAL", name: "51 - PARADA DAS EMBALAGENS LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_140", setor: "FISCAL", name: "76 - SMT TRANSPORTES LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_141", setor: "FISCAL", name: "74 - R.J.N. SERV. ADM E LOC. - EMITIR TAXA DE LICENÇA DE FUNCIONAMENTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_142", setor: "FISCAL", name: "73 - REVIVER SOLUTION - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_143", setor: "FISCAL", name: "72 - TAISE MARIA DA SILVA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_144", setor: "FISCAL", name: "70 - IDAILSON PEREIRA EMPREENDIMENTOS LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_145", setor: "FISCAL", name: "69 - DINÂMICA CONSULTORIA EM INFORMATICA LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_146", setor: "FISCAL", name: "68 - YAH CUSTOM - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_147", setor: "FISCAL", name: "67 - AÇAI DO MACHU LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_148", setor: "FISCAL", name: "65 - ALVES PROJETOS - REF. E CONSTR. LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_149", setor: "FISCAL", name: "64 - SERGIO NUNES MANUTENÇÃO EM GERAL - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_150", setor: "FISCAL", name: "63 - ISRAEL AUTO PEÇAS E SERVIÇOS LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_151", setor: "FISCAL", name: "61 - NELSON GOMES - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_152", setor: "FISCAL", name: "56 - CASA DE CARNES F. PRIMOS - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_153", setor: "FISCAL", name: "53 - MATHEUS DOS SANTOS BARROS - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_154", setor: "FISCAL", name: "48 - TENDTUDO CELL - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_155", setor: "FISCAL", name: "47 - F.J. CONST. E MÃO DE OBRA LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_156", setor: "FISCAL", name: "46 - AA HOSTS LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_157", setor: "FISCAL", name: "45 - MM ALVES ENGENHARIA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_158", setor: "FISCAL", name: "43 - TZN TRANSPORTES - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_159", setor: "FISCAL", name: "42 - ADEGA E CIA DR - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_160", setor: "FISCAL", name: "41 - T&S CONS. E SERVIÇOS - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_161", setor: "FISCAL", name: "40 - JMA ELETRIC COM. DE MATERIAIS - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_162", setor: "FISCAL", name: "37 - CRISLIMP COMÉRCIO EM GERAL LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_163", setor: "FISCAL", name: "36 - TITANEO SERVIÇOS LTDA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_164", setor: "FISCAL", name: "31 - RMR MENDONÇA ASSESSORIA CONTÁBIL - ME - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_165", setor: "FISCAL", name: "29 - RESIDÊNCIA MINHA EIRELI - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_166", setor: "FISCAL", name: "28 - LUIZ O. S. M. DA SILVA INFORMÁTICA - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_167", setor: "FISCAL", name: "23 - CRISTIANE G.S.I. DE ADV - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_168", setor: "FISCAL", name: "04 - DEPOSITO DE MATERIAIS - EMITIR TAXA DE FISCALIZAÇÃO DO ESTABELECIMENTO (TFE)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_169", setor: "FISCAL", name: "56 - CASA DE CARNES F. PRIMOS - ENVIAR BOLETOS HONORÁRIOS CONTÁBEIS VENC. 16", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_170", setor: "FISCAL", name: "61 - NELSON GOMES - BOLETO HONORÁRIOS CONTÁBEIS - VENC. 30", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_171", setor: "FISCAL", name: "75 - VISUALBANC SERV. - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_172", setor: "FISCAL", name: "74 - R.J.N. SERVIÇOS - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_173", setor: "FISCAL", name: "73 - REVIVER SOLUTION - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_174", setor: "FISCAL", name: "72 - TAISE MARIA DA SILVA - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_175", setor: "FISCAL", name: "70 - IDAILSON PEREIRA - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_176", setor: "FISCAL", name: "69 - DINÂMICA CONS. - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_177", setor: "FISCAL", name: "68 - YAH CUSTOM - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_178", setor: "FISCAL", name: "67 - AÇAI DO MACHU - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_179", setor: "FISCAL", name: "65 - ALVES PROJETOS - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_180", setor: "FISCAL", name: "63 - ISRAEL AUTO PEÇAS - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_181", setor: "FISCAL", name: "55 - BOSSI PREMIUM - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_182", setor: "FISCAL", name: "48 - TENDTUDO CELL - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_183", setor: "FISCAL", name: "47 - F.J. CONSTRUÇÃO - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_184", setor: "FISCAL", name: "46 - AAHOSTS - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_185", setor: "FISCAL", name: "45 - MM ALVES ENG. - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_186", setor: "FISCAL", name: "43 - TZN TRANSPORTES - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_187", setor: "FISCAL", name: "42 - ADEGA & CIA - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_188", setor: "FISCAL", name: "41 - T&S CONSULTORIA - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_189", setor: "FISCAL", name: "40 - JMA ELETRIC COM. - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_190", setor: "FISCAL", name: "37 - CHRISLIMP COMÉRCIO - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_191", setor: "FISCAL", name: "36 - TITANEO SERVIÇOS - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_192", setor: "FISCAL", name: "31 - RMR ASSESSORIA - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_193", setor: "FISCAL", name: "29 - RESIDÊNCIA MINHA - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_194", setor: "FISCAL", name: "28 - LUIZ ÓTAVIO - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_195", setor: "FISCAL", name: "23 - CRISTIANE GOMES ADV - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_196", setor: "FISCAL", name: "04 - DEPOSITO DE MATERIAIS - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_197", setor: "FISCAL", name: "76 - SMT TRANSPORTES - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_198", setor: "FISCAL", name: "76 - SMT TRANSPORTES - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_199", setor: "DP", name: "63 - ISRAEL AUTO PEÇAS EMITIR RELATÓRIO DE FÉRIAS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_200", setor: "DP", name: "63 - ISRAEL AUTO PEÇAS - ADIANTAMENTO VALE", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_201", setor: "FISCAL", name: "DIMOB - DECLARAÇÃO DE INFORMAÇÕES SOBRE ATIVIDADES IMOBILIÁRIAS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_202", setor: "FISCAL", name: "ICMS-DESTDA - ENVIAR OBRIGAÇÕES DAS EMPRESAS OPTANTE SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_203", setor: "FISCAL", name: "46 - AA HOSTS - DIMOB", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_204", setor: "FISCAL", name: "29 - RESIDÊNCIA MINHA - DIMOB", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_205", setor: "DP", name: "63 - ISRAEL AUTO PEÇAS - FOLHA DE PONTO/VALE TRANSPORTE", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_206", setor: "FISCAL", name: "58 - NAÇÃO SANTA - MIT MENSAL - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_207", setor: "FISCAL", name: "58 - NAÇÃO SANTA EFD - ICMS/IPI - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_208", setor: "FISCAL", name: "58 - NAÇÃO SANTA EFD - CONTRIBUIÇÃO - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_209", setor: "FISCAL", name: "52 - AUTO CAR TOMAZRAYFF ESCRITURAÇÃO DAS NOTAS FISCAIS - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_210", setor: "FISCAL", name: "52 - AUTO CAR TOMAZRAYFF EFD - ICMS/IPI - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_211", setor: "FISCAL", name: "52 - AUTO CAR TOMAZRAYFF EFD - CONTRIBUIÇÃO - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_212", setor: "FISCAL", name: "52 - AUTO CAR TOMAZRAYFF MIT MENSAL - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_213", setor: "FISCAL", name: "66 - JMA ELETRIC MAT. - ESCRITURAÇÃO DAS NOTAS FISCAIS - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_214", setor: "FISCAL", name: "51 - PARADA DAS EMBALAGENS - ISS PREFEITURA SP - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_215", setor: "FISCAL", name: "51 - PARADA DAS EMBALAGENS - EFD-CONTRIBUIÇÃO - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_216", setor: "FISCAL", name: "51 - PARADA DAS EMBALAGENS - EFD - ICMS/IPI - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_217", setor: "FISCAL", name: "51 - PARADA DAS EMBALAGENS - EMISSÃO DOS IMPOSTOS ICMS 20 PIS/COFINS 25 IRPJ/CSLL RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_218", setor: "FISCAL", name: "51 - PARADA DAS EMBALAGENS - MIT MENSAL - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_219", setor: "FISCAL", name: "73 - REVIVER SOLUTION - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_220", setor: "FISCAL", name: "74 - R.J.N. SERVIÇOS - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_221", setor: "FISCAL", name: "73 - REVIVER SOLUTION - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_222", setor: "SOCIETARIO", name: "CONSTITUIÇÃO DE NOVA EMPRESA - CONVERSAR COM O ARLINDO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_223", setor: "DP", name: "73 - REVIVER SOLUTION - FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_224", setor: "FISCAL", name: "MEI EVELYN M. DE OLIVEIRA - ACORDO SIMEI", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_225", setor: "FISCAL", name: "72 - TAISE MARIA DA SILVA - ACORDO SIMEI PARCELAMENTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_226", setor: "FISCAL", name: "72 - TAISE MARIA DA SILVA - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_227", setor: "FISCAL", name: "72 - TAISE MARIA DA SILVA - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_228", setor: "DP", name: "31 - RMR ASS. FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_229", setor: "FISCAL", name: "56 - CASA DE CARNES F. PRIMOS - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_230", setor: "FISCAL", name: "70 - IDAILSON PEREIRA DA SILVA FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_231", setor: "DP", name: "37 - CHRISLIMP FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_232", setor: "CONTABIL", name: "E-MAIL - SOLICITAR FECHAMENTO CONTÁBIL MENSAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_233", setor: "FISCAL", name: "E-MAIL - SOLICITAR FECHAMENTO FISCAL MENSAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_234", setor: "DP", name: "47 - F. J. CONSTRUÇÃO - ANALISAR CONVENÇÃO COLETIVA MÊS BASE MAIO (05)", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_235", setor: "FISCAL", name: "69 - DINÂMICA ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_236", setor: "FISCAL", name: "67 - AÇAI DO MACHU - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_237", setor: "DP", name: "47 - F.J. CONSTRUÇÃO REINF", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_238", setor: "FISCAL", name: "69 - DINÂMICA CONS. FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_239", setor: "FISCAL", name: "68 - YAH CUSTOM - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_240", setor: "FISCAL", name: "65 - ALVES PROJETOS REF. E CONST. - ISS PREFEITURA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_241", setor: "DP", name: "29 - RESIDÊNCIA MINHA FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_242", setor: "DP", name: "53 - MATHEUS BARROS FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_243", setor: "DP", name: "41 - T&S CONSULTORIA FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_244", setor: "DP", name: "56 - CASA DE CARNES F. PRIMOS - FOLHA DE PONTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_245", setor: "FISCAL", name: "51 - PARADA DAS EMBALAGENS - ESCRITURAÇÃO DAS NOTAS FISCAIS - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_246", setor: "DP", name: "68 - YAH CUSTOM - FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_247", setor: "FISCAL", name: "68 - YAH CUSTOM - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_248", setor: "DP", name: "61 - NELSON GOMES EMITIR RELATÓRIO DE FÉRIAS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_249", setor: "DP", name: "56 - CASA DE CARNES F. PRIMOS - EMITIR RELATÓRIO DE FÉRIAS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_250", setor: "FISCAL", name: "67 - AÇAI DO MACHU - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_251", setor: "FISCAL", name: "65 - ALVES PROJETOS REF. E CONST. FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_252", setor: "FISCAL", name: "66 - JMA ELETRIC MAT. MIT MENSAL - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_253", setor: "FISCAL", name: "66 - JMA ELETRIC MAT. EMISSÃO DOS IMPOSTOS ICMS 20 PIS/COFINS 25 IRPJ/COFINS - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_254", setor: "FISCAL", name: "66 - JMA ELETRIC MAT. EFD - ICMS/IPI - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_255", setor: "FISCAL", name: "66 - JMA ELETRIC MAT. EFD - CONTRIBUIÇÃO - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_256", setor: "FISCAL", name: "66 - JMA ELETRIC MAT. - ISS PREFEITURA SP - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_257", setor: "FISCAL", name: "36 - TITANEO FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_258", setor: "DP", name: "67 - AÇAI DO MACHU - FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_259", setor: "DP", name: "40 - JMA ELETRIC COM. FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_260", setor: "DP", name: "51 - PARADA DAS EMBALAGENS FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_261", setor: "FISCAL", name: "62 - YAH GLASSES DCTF", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_262", setor: "FISCAL", name: "64 - SERGIO NUNES M. EM GERAL - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_263", setor: "FISCAL", name: "63 - ISRAEL AUTO PEÇAS - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_264", setor: "FISCAL", name: "59 - MOTTAIT - ISS PREFEITURA - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_265", setor: "IRPF", name: "IR MARCO ANTONIO DOS SANTOS MESQUITA ENVIAR RECIBO E DECLARAÇÃO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_266", setor: "FISCAL", name: "61 - NELSON GOMES 16586211824 - DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_267", setor: "FISCAL", name: "56 - CASA DE CARNES F. PRIMOS - DECLARAÇÃO DEFIS SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_268", setor: "FISCAL", name: "54 - QUINTAL DO COLEGA DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_269", setor: "FISCAL", name: "53 - MATHEUS DOS SANTOS BARROS DEFIS DECLARAÇÃO SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_270", setor: "DP", name: "51 - PARADA DAS EMBALAGENS - FOLHA DE PONTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_271", setor: "DP", name: "51 - PARADA DAS EMBALAGEM EMITIR RELATÓRIO DE FÉRIAS - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_272", setor: "DP", name: "47 - F.J. CONSTRUÇÃO EMITIR RELATÓRIO DE FÉRIAS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_273", setor: "DP", name: "04 - DEPOSITO DE MATERIAIS - EMITIR RELATÓRIO DE FÉRIAS", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_274", setor: "FISCAL", name: "58 - NAÇÃO SANTA - ISS PREFEITURA SP - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_275", setor: "FISCAL", name: "52 - AUTO CAR TOMAZRAYFF - ISS PREFEITURA SP - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_276", setor: "FISCAL", name: "61 - NELSON GOMES 16586211824 - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_277", setor: "FISCAL", name: "64 - SERGIO NUNES MANUTENCAO EM GERAL FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_278", setor: "FISCAL", name: "63 - ISRAEL AUTO PEÇAS E SERVIÇOS - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_279", setor: "FISCAL", name: "61 - NELSON GOMES FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_280", setor: "FISCAL", name: "59 - MOTTAIT - FECH. FISCAL - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_281", setor: "DP", name: "04 - DEPOSITO DE MATERIAIS - ADIANTAMENTO VALE", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_282", setor: "FISCAL", name: "58 - NAÇÃO SANTA ESCRITURAÇÃO DAS NOTAS FISCAIS - RPA", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_283", setor: "FISCAL", name: "56 - CASA DE CARNES F. PRIMOS - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_284", setor: "FISCAL", name: "53 - MATHEUS DOS SANTOS FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_285", setor: "DP", name: "47 - F. J. CONSTRUÇÃO - ADIANTAMENTO VALE", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_286", setor: "SOCIETARIO", name: "31 - RMR ASS. PAGAR CONTAS ESCRITÓRIO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_287", setor: "FISCAL", name: "47 - F. J. CONSTRUÇÃO FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_288", setor: "FISCAL", name: "46 - AA HOSTS FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_289", setor: "FISCAL", name: "45 - MM ALVES ENGENHARIA FECH. SIMPLES NACONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_290", setor: "DP", name: "E-MAIL - SOLICITAR FECHAMENTO DA FOLHA DE PAGAMENTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_291", setor: "FISCAL", name: "43 - TZN TRANSPORTE - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_292", setor: "FISCAL", name: "42 - ADEGA DR FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_293", setor: "DP", name: "47 - F.J. CONSTRUÇÃO - FOLHA DE PONTO/VALE TRANSPORTE", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_294", setor: "FISCAL", name: "41 - T&S CONSULTORIA FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_295", setor: "FISCAL", name: "40 - JMA ELETRIC COM. FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_296", setor: "DP", name: "04 - DEPOSITO DE MATERIAIS - FOLHA DE PONTO/VALE REFEIÇÃO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_297", setor: "FISCAL", name: "37 - CHRISLIMP FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_298", setor: "FISCAL", name: "31 - RMR ASS. FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_299", setor: "FISCAL", name: "29 - RESIDÊNCIA MINHA FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_300", setor: "FISCAL", name: "28 - LUIZ OTÁVIO FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_301", setor: "FISCAL", name: "23 - CRISTIANE ADV FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_302", setor: "FISCAL", name: "46 - AAHOSTS - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_303", setor: "FISCAL", name: "45 - MM ALVES - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_304", setor: "FISCAL", name: "43 - TZN TRANSPORTES - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_305", setor: "FISCAL", name: "41 - T&S CONSULTORIA - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_306", setor: "FISCAL", name: "40 - JMA ELETRIC COM. - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_307", setor: "FISCAL", name: "04 - DEPOSITO DE MATERIAIS - FECH. SIMPLES NACIONAL", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_308", setor: "FISCAL", name: "37 - CHRISLIMP - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_309", setor: "FISCAL", name: "36 - TITANEO - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_310", setor: "FISCAL", name: "31 - RMR ASS. - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_311", setor: "FISCAL", name: "29 - RESIDÊNCIA MINHA - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_312", setor: "FISCAL", name: "28 - LUIZ OTÁVIO ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_313", setor: "FISCAL", name: "23 - CRISTIANE ADV - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_314", setor: "FISCAL", name: "04 - DEPOSITO DE MATERIAIS - ISS PREFEITURA SP", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_315", setor: "FISCAL", name: "EUCLIDES PARCELAMENTO 00810948842 / 004291224", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() },
+  { id: "imp_316", setor: "DP", name: "56 - CASA DE CARNES F. PRIMOS - FECH. FOLHA DE PAGTO", subtasks: [], recorrencia: "Avulso", status: "pending", responsavel: "", observacao: "Importado do Microsoft To Do", competencia: "2026-05", prazo: "", criado: new Date().toISOString() }
+];
+
+const COLABORADORES = ["WILSON", "RENATA", "DANIELA"];
+
+const EMPTY_NEW = { name: "", setor: "DP", recorrencia: "Mensal", responsavel: "", competencia: "", prazo: "", observacao: "" };
+
+// ─── APP ───────────────────────────────────────────────────────────────────────
+function App() {
+  const [tasks, setTasks]               = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [syncing, setSyncing]           = useState(false);
+  const [dbError, setDbError]           = useState(null);
+  const [view, setView]                 = useState("geral");
+  const [filterStatus, setFilterStatus] = useState("active");
+  const [filterRec, setFilterRec]       = useState("all");
+  const [filterAlert, setFilterAlert]   = useState(false);
+  const [editId, setEditId]             = useState(null);
+  const [newTaskModal, setNewTaskModal] = useState(false);
+  const [newTask, setNewTask]           = useState(EMPTY_NEW);
+  const [search, setSearch]             = useState("");
+  const [sortBy, setSortBy]             = useState("prazo");
+  const [filterResp, setFilterResp]     = useState("all");
+  const [realtimeOk, setRealtimeOk]   = useState(true);
+  const seeded = useRef(false);
+
+  // ── Carregar tarefas do Supabase ──
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      const { data, error } = await sb.from("tarefas").select("*").order("criado", { ascending: true });
+      if (error) {
+        setDbError(error.message);
+        const saved = localStorage.getItem("rmr_tasks_v8");
+        if (saved) { try { setTasks(JSON.parse(saved)); } catch {} }
+      } else if (data.length === 0 && !seeded.current) {
+        seeded.current = true;
+        const initial = buildInitialTasks();
+        const rows = initial.map(t => ({
+          id: t.id, setor: t.setor, name: t.name,
+          subtasks: t.subtasks || [],
+          recorrencia: t.recorrencia, status: t.status,
+          responsavel: t.responsavel || "", observacao: t.observacao || "",
+          competencia: t.competencia || mesAtual(), prazo: t.prazo || "",
+          criado: t.criado || new Date().toISOString(),
+        }));
+        for (let i = 0; i < rows.length; i += 100) {
+          await sb.from("tarefas").insert(rows.slice(i, i + 100));
+        }
+        setTasks(initial);
+      } else {
+        const loaded = data.map(t => ({ ...t, subtasks: t.subtasks || [] }));
+
+        // ── Deduplicação automática (race condition multi-abas) ──
+        // Mantém a tarefa MAIS RECENTE de cada grupo duplicado.
+        // Tarefas criadas por ação humana são sempre mais novas que as geradas
+        // automaticamente por gerarRecorrencias(), portanto nunca são deletadas.
+        const grupos = {};
+        loaded.forEach(t => {
+          const key = `${t.setor}|${t.name}|${t.competencia}`;
+          if (!grupos[key]) grupos[key] = [];
+          grupos[key].push(t);
+        });
+        const idsParaDeletar = [];
+        Object.values(grupos).forEach(grupo => {
+          if (grupo.length <= 1) return;
+          // Ordena do mais recente para o mais antigo e preserva apenas o MAIS RECENTE
+          grupo.sort((a, b) => (b.criado || "").localeCompare(a.criado || ""));
+          grupo.slice(1).forEach(t => idsParaDeletar.push(t.id));
+        });
+        if (idsParaDeletar.length > 0) {
+          console.log(`[RMR] Removendo ${idsParaDeletar.length} duplicata(s) do banco...`);
+          for (let i = 0; i < idsParaDeletar.length; i += 100) {
+            await sb.from("tarefas").delete().in("id", idsParaDeletar.slice(i, i + 100));
+          }
+        }
+
+        let limpo = loaded.filter(t => !idsParaDeletar.includes(t.id));
+
+        // ── Retry de tarefas pendentes (salvas localmente mas não sincronizadas) ──
+        // Se o Supabase falhou no addTask anterior, a tarefa está na fila pendente.
+        // Tenta reenviar agora que a conexão foi restabelecida.
+        try {
+          const pendentes = lsGetPending();
+          const idsNoServidor = new Set(limpo.map(t => t.id));
+          const paraResync = pendentes.filter(t => !idsNoServidor.has(t.id));
+          for (const t of paraResync) {
+            const { error: syncErr } = await sb.from("tarefas").insert([t]);
+            if (!syncErr) {
+              limpo = [...limpo, t];
+              lsRemovePending(t.id);
+              console.log(`[RMR] Tarefa ressincronizada: ${t.name}`);
+            }
+          }
+        } catch (e) {
+          console.warn("[RMR] Falha ao ressincronizar tarefas pendentes:", e);
+        }
+
+        // ── Exibe tarefas locais ainda pendentes de sync (offline-first) ──
+        // Garante que o usuário veja suas tarefas mesmo que o Supabase não as tenha ainda.
+        try {
+          const pendentesRestantes = lsGetPending();
+          const idsJaCarregados = new Set(limpo.map(t => t.id));
+          pendentesRestantes
+            .filter(t => !idsJaCarregados.has(t.id))
+            .forEach(t => { limpo = [...limpo, t]; });
+        } catch {}
+
+        setTasks(limpo);
+        lsSetTasks(limpo);
+        await gerarRecorrencias(limpo);
+      }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  // ── Gera tarefas recorrentes para o mês atual se ainda não existirem ──
+  async function gerarRecorrencias(todasTarefas) {
+    const mes = mesAtual();
+    const anoAtual = String(new Date().getFullYear());
+
+    // Bloqueia geração se já existe qualquer instância no mês atual com mesmo nome+setor
+    const jaTemPendente = new Set(
+      todasTarefas
+        .filter(t => t.competencia === mes)
+        .map(t => `${t.setor}|${t.name}`)
+    );
+
+    // Para Anual: bloqueia se já existe no ano corrente (pendente ou concluída)
+    const jaTemAnual = new Set(
+      todasTarefas
+        .filter(t => t.recorrencia === "Anual" && t.competencia && t.competencia.startsWith(anoAtual))
+        .map(t => `${t.setor}|${t.name}`)
+    );
+
+    // Modelo: última versão de cada tarefa recorrente (não Avulso, não cancelada)
+    const modelos = {};
+    todasTarefas
+      .filter(t => t.recorrencia && t.recorrencia !== "Avulso" && t.status !== "cancelled")
+      .forEach(t => {
+        const key = `${t.setor}|${t.name}`;
+        if (!modelos[key] || t.criado > modelos[key].criado) modelos[key] = t;
+      });
+
+    const novas = [];
+    Object.values(modelos).forEach(modelo => {
+      const key = `${modelo.setor}|${modelo.name}`;
+
+      if (modelo.recorrencia === "Anual") {
+        if (jaTemAnual.has(key)) return;
+      } else {
+        // Mensal/Semanal: só gera se não existe NENHUMA pendente com esse nome+setor
+        if (jaTemPendente.has(key)) return;
+      }
+
+      const deveGerar =
+        modelo.recorrencia === "Diária" ||
+        modelo.recorrencia === "Semanal" ||
+        modelo.recorrencia === "Mensal" ||
+        (modelo.recorrencia === "Anual" && !jaTemAnual.has(key));
+
+      if (!deveGerar) return;
+
+      novas.push({
+        id: crypto.randomUUID(),
+        setor: modelo.setor,
+        name: modelo.name,
+        subtasks: [],
+        recorrencia: modelo.recorrencia,
+        status: "pending",
+        responsavel: modelo.responsavel || "",
+        observacao: modelo.observacao || "",
+        competencia: mes,
+        prazo: modelo.prazo || "",
+        criado: new Date().toISOString(),
+      });
+    });
+
+    if (novas.length === 0) return;
+
+    for (let i = 0; i < novas.length; i += 100) {
+      await sb.from("tarefas").insert(novas.slice(i, i + 100));
+    }
+    setTasks(p => {
+      const atualizadas = [...p, ...novas];
+      // BUG #3 FIX: atualiza localStorage para que o fallback reflita as recorrências geradas
+      try { localStorage.setItem("rmr_tasks_v8", JSON.stringify(atualizadas)); } catch {}
+      return atualizadas;
+    });
+    console.log(`[RMR] ${novas.length} tarefas recorrentes geradas para ${mes}`);
+  }
+
+  // ── Realtime: escuta mudanças de outros usuários ──
+  useEffect(() => {
+    const channel = sb.channel("tarefas-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tarefas" }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          setTasks(p => {
+            if (p.find(t => t.id === payload.new.id)) return p;
+            return [...p, { ...payload.new, subtasks: payload.new.subtasks || [] }];
+          });
+        } else if (payload.eventType === "UPDATE") {
+          if (payload.new.status === "cancelled") {
+            setTasks(p => p.filter(t => t.id !== payload.new.id));
+          } else {
+            setTasks(p => p.map(t => t.id === payload.new.id ? { ...payload.new, subtasks: payload.new.subtasks || [] } : t));
+          }
+        } else if (payload.eventType === "DELETE") {
+          setTasks(p => p.filter(t => t.id !== payload.old.id));
+        }
+      })
+      .subscribe((status) => {
+        setRealtimeOk(status === "SUBSCRIBED");
+      });
+    return () => sb.removeChannel(channel);
+  }, []);
+
+  // ── Próxima competência (independe de prazo estar preenchido) ──
+  function proximaCompetencia(competencia, recorrencia) {
+    if (!competencia) return mesAtual();
+    const [ano, mes] = competencia.split("-").map(Number);
+    if (recorrencia === "Diária" || recorrencia === "Semanal" || recorrencia === "Mensal") {
+      const novoMes = mes === 12 ? 1 : mes + 1;
+      const novoAno = mes === 12 ? ano + 1 : ano;
+      return `${novoAno}-${String(novoMes).padStart(2, "0")}`;
+    }
+    if (recorrencia === "Anual") return `${ano + 1}-${String(mes).padStart(2, "0")}`;
+    return competencia;
+  }
+
+  // ── CRUD ──
+  const updateTask = useCallback(async (id, ch) => {
+    setTasks(p => p.map(t => t.id === id ? { ...t, ...ch } : t));
+    setSyncing(true);
+    const { error: updateError } = await sb.from("tarefas").update(ch).eq("id", id);
+    if (updateError) {
+      console.error("[RMR] Erro ao atualizar tarefa:", updateError.message);
+      setTasks(p => p.map(t => t.id === id ? { ...t } : t));
+      setSyncing(false);
+      return;
+    }
+    if (ch.status === "done") {
+      const tarefa = tasks.find(t => t.id === id);
+      if (!tarefa) { setSyncing(false); return; }
+      const tarefaAtualizada = {
+        ...tarefa,
+        ...ch
+      };
+      if (tarefaAtualizada.recorrencia && tarefaAtualizada.recorrencia !== "Avulso") {
+        // Prazo é opcional: se existir, avança; se não existir, a cópia nasce sem prazo
+        const novoPrazo = tarefaAtualizada.prazo ? proximoPrazo(tarefaAtualizada.prazo, tarefaAtualizada.recorrencia) : "";
+        const novaComp = proximaCompetencia(tarefaAtualizada.competencia, tarefaAtualizada.recorrencia);
+        const jaExiste = tasks.some(t =>
+          t.name === tarefa.name &&
+          t.setor === tarefa.setor &&
+          t.competencia === novaComp &&
+          t.status !== "done"
+        );
+        if (jaExiste) {
+          console.log("Recorrência já existe.");
+          setSyncing(false);
+          return;
+        }
+        const novaTask = {
+          id: crypto.randomUUID(),
+          setor: tarefaAtualizada.setor,
+          name: tarefaAtualizada.name,
+          subtasks: tarefaAtualizada.subtasks || [],
+          recorrencia: tarefaAtualizada.recorrencia,
+          status: "pending",
+          responsavel: tarefaAtualizada.responsavel || "",
+          observacao: tarefaAtualizada.observacao || "",
+          competencia: novaComp,
+          prazo: novoPrazo,
+          criado: new Date().toISOString(),
+        };
+        const { error } = await sb.from("tarefas").insert([novaTask]);
+        if (error) {
+          console.error("[RMR] Erro ao criar próxima tarefa recorrente:", error.message);
+        } else {
+          // BUG #4 FIX: atualiza localStorage ao criar cópia recorrente
+          setTasks(p => {
+            if (p.find(t => t.id === novaTask.id)) return p;
+            const atualizadas = [...p, novaTask];
+            try { localStorage.setItem("rmr_tasks_v8", JSON.stringify(atualizadas)); } catch {}
+            return atualizadas;
+          });
+        }
+      }
+    }
+    setSyncing(false);
+  }, [tasks]);
+
+  const removeTask = useCallback(async (id, recorrencia) => {
+    setSyncing(true);
+    const ehRecorrente = recorrencia && recorrencia !== "Avulso";
+    const { error } = ehRecorrente
+      ? await sb.from("tarefas").update({ status: "cancelled" }).eq("id", id)
+      : await sb.from("tarefas").delete().eq("id", id);
+    if (error) {
+      console.error("[RMR] Erro ao excluir tarefa:", error.message);
+      setSyncing(false);
+      return;
+    }
+    // BUG #5 FIX: atualiza localStorage ao remover tarefa
+    setTasks(p => {
+      const atualizadas = p.filter(t => t.id !== id);
+      try { localStorage.setItem("rmr_tasks_v8", JSON.stringify(atualizadas)); } catch {}
+      return atualizadas;
+    });
+    setSyncing(false);
+  }, []);
+
+  // ── Helpers de persistência local ──
+  function lsGetTasks() {
+    try { const s = localStorage.getItem("rmr_tasks_v8"); return s ? JSON.parse(s) : []; } catch { return []; }
+  }
+  function lsSetTasks(lista) {
+    try { localStorage.setItem("rmr_tasks_v8", JSON.stringify(lista)); } catch {}
+  }
+  function lsGetPending() {
+    try { const s = localStorage.getItem("rmr_pending_sync"); return s ? JSON.parse(s) : []; } catch { return []; }
+  }
+  function lsSetPending(lista) {
+    try { localStorage.setItem("rmr_pending_sync", JSON.stringify(lista)); } catch {}
+  }
+  function lsAddPending(t) {
+    const pendentes = lsGetPending();
+    if (!pendentes.find(p => p.id === t.id)) lsSetPending([...pendentes, t]);
+  }
+  function lsRemovePending(id) {
+    lsSetPending(lsGetPending().filter(p => p.id !== id));
+  }
+
+  const addTask = useCallback(async () => {
+    if (!newTask.name.trim()) return;
+    const t = {
+      id: crypto.randomUUID(), setor: newTask.setor, name: newTask.name.trim(),
+      subtasks: [], recorrencia: newTask.recorrencia, status: "pending",
+      responsavel: newTask.responsavel, observacao: newTask.observacao,
+      competencia: newTask.competencia || mesAtual(), prazo: newTask.prazo,
+      criado: new Date().toISOString(),
+    };
+    // Persiste localmente ANTES da chamada de rede (garante sobrevivência ao F5)
+    setTasks(p => { const novo = [...p, t]; lsSetTasks(novo); return novo; });
+    lsAddPending(t); // fila de sync caso o Supabase falhe
+    setNewTask(EMPTY_NEW);
+    setNewTaskModal(false);
+    setSyncing(true);
+    try {
+      const { error } = await sb.from("tarefas").insert([t]);
+      if (error) {
+        console.error("[RMR] Erro ao inserir tarefa:", error.message, error.code);
+        setDbError("Tarefa salva localmente. Erro ao sincronizar com o servidor.");
+        // Mantém na UI e no localStorage; será resincrornizada no próximo load
+      } else {
+        lsRemovePending(t.id); // sync bem-sucedido: remove da fila pendente
+        setDbError(null);
+      }
+    } catch (e) {
+      console.error("[RMR] Exceção ao inserir tarefa:", e);
+      setDbError("Tarefa salva localmente. Sem conexão com o servidor.");
+      // Tarefa permanece na UI e no localStorage; fila pendente já foi registrada
+    }
+    setSyncing(false);
+  }, [newTask]);
+
+  // ── Exportar relatório PDF ──
+  const exportarPDF = useCallback((lista) => {
+    if (!lista || !Array.isArray(lista)) lista = tasks;
+    const mes = mesAtual();
+    const win = window.open("", "_blank");
+    const totalTasks = lista.length;
+    const doneTasks  = lista.filter(t => t.status === "done").length;
+    const pendentes  = lista.filter(t => t.status === "pending").length;
+    const andamento  = lista.filter(t => t.status === "in_progress").length;
+    const vencidas   = lista.filter(t => { const p = prazoInfo(t.prazo); return p && p.level === "vencida" && t.status !== "done"; }).length;
+    const statusLabel = { pending: "Pendente", in_progress: "Em andamento", done: "Concluída" };
+    const statusColor = { pending: "#854F0B", in_progress: "#185FA5", done: "#3B6D11" };
+    const statusBg    = { pending: "#FAEEDA", in_progress: "#E6F1FB", done: "#EAF3DE" };
+    const bySector = {};
+    lista.forEach(t => { if (!bySector[t.setor]) bySector[t.setor] = []; bySector[t.setor].push(t); });
+    let rows = "";
+    Object.entries(INITIAL_DATA).forEach(([key, data]) => {
+      const st = bySector[key] || [];
+      if (st.length === 0) return;
+      rows += `<tr><td colspan="5" style="background:${data.bg};color:${data.color};font-weight:600;font-size:12px;padding:6px 10px;border-top:2px solid ${data.color}">${data.label} (${st.length})</td></tr>`;
+      st.forEach(t => {
+        const prazo = t.prazo ? new Date(t.prazo + "T00:00:00").toLocaleDateString("pt-BR") : "—";
+        const resp  = t.responsavel || "—";
+        const obs   = t.observacao  || "";
+        const sl    = statusLabel[t.status] || t.status;
+        const sc    = statusColor[t.status] || "#444";
+        const sbg   = statusBg[t.status]    || "#eee";
+        rows += `<tr>
+          <td style="padding:5px 10px;font-size:11px;border-bottom:0.5px solid #eee">${t.name}</td>
+          <td style="padding:5px 10px;font-size:11px;border-bottom:0.5px solid #eee;white-space:nowrap"><span style="background:${sbg};color:${sc};border-radius:4px;padding:1px 6px;font-size:10px">${sl}</span></td>
+          <td style="padding:5px 10px;font-size:11px;border-bottom:0.5px solid #eee;white-space:nowrap">${resp}</td>
+          <td style="padding:5px 10px;font-size:11px;border-bottom:0.5px solid #eee;white-space:nowrap">${prazo}</td>
+          <td style="padding:5px 10px;font-size:11px;border-bottom:0.5px solid #eee;color:#5F5E5A;font-style:italic">${obs}</td>
+        </tr>`;
+      });
+    });
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>RMR — Relatório ${mes}</title>
+    <style>
+      body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#2C2C2A;font-size:13px}
+      h1{font-size:18px;font-weight:600;margin:0 0 2px}
+      .sub{font-size:12px;color:#888780;margin:0 0 16px}
+      .cards{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+      .card{background:#F8F7F4;border-radius:8px;padding:10px 16px;min-width:100px}
+      .card .num{font-size:22px;font-weight:600;margin:0}
+      .card .lbl{font-size:11px;color:#888780;margin:0}
+      table{width:100%;border-collapse:collapse}
+      th{text-align:left;font-size:11px;color:#888780;padding:5px 10px;border-bottom:1px solid #D3D1C7}
+      @media print{button{display:none}body{padding:10px}}
+    </style></head><body>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <div style="width:28px;height:28px;border-radius:6px;background:#1D6FA4;display:flex;align-items:center;justify-content:center">
+        <span style="color:#fff;font-size:13px;font-weight:700">R</span></div>
+      <h1>RMR Assessoria Contábil</h1>
+    </div>
+    <p class="sub">Relatório de tarefas — Competência ${mes} — Gerado em ${new Date().toLocaleDateString("pt-BR")}</p>
+    <div class="cards">
+      <div class="card"><p class="num">${totalTasks}</p><p class="lbl">Total</p></div>
+      <div class="card" style="background:#EAF3DE"><p class="num" style="color:#3B6D11">${doneTasks}</p><p class="lbl">Concluídas</p></div>
+      <div class="card" style="background:#E6F1FB"><p class="num" style="color:#185FA5">${andamento}</p><p class="lbl">Em andamento</p></div>
+      <div class="card" style="background:#FAEEDA"><p class="num" style="color:#854F0B">${pendentes}</p><p class="lbl">Pendentes</p></div>
+      ${vencidas > 0 ? `<div class="card" style="background:#FCEBEB"><p class="num" style="color:#A32D2D">${vencidas}</p><p class="lbl">Vencidas</p></div>` : ""}
+    </div>
+    <div style="text-align:right;margin-bottom:8px">
+      <button onclick="window.print()" style="background:#1D6FA4;color:#fff;border:none;border-radius:6px;padding:7px 18px;font-size:12px;cursor:pointer">Imprimir / Salvar PDF</button>
+    </div>
+    <table><thead><tr>
+      <th>Tarefa</th><th>Status</th><th>Responsável</th><th>Prazo</th><th>Observação</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    </body></html>`);
+    win.document.close();
+  }, [tasks]);
+
+  const alertCount = useMemo(() =>
+    tasks.filter((t) => {
+      if (t.status === "done") return false;
+      if (t.status === "cancelled") return false;
+      const p = prazoInfo(t.prazo);
+      return p && ["vencida","hoje","urgente"].includes(p.level);
+    }).length, [tasks]);
+
+  const visibleTasks = useMemo(() => {
+    const filtered = tasks.filter((t) => {
+      if (view !== "geral" && t.setor !== view) return false;
+      if (t.status === "cancelled") return false;
+      if (filterStatus === "active" && t.status === "done") return false;
+      if (filterStatus !== "active" && filterStatus !== "all" && t.status !== filterStatus) return false;
+      if (filterRec !== "all" && t.recorrencia !== filterRec) return false;
+      if (filterAlert) {
+        if (t.status === "done") return false;
+        const p = prazoInfo(t.prazo);
+        if (!p || !["vencida","hoje","urgente"].includes(p.level)) return false;
+      }
+      if (filterResp !== "all" && t.responsavel !== filterResp) return false;
+      if (search && !t.name.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    });
+    const levelOrder = { vencida: 0, hoje: 1, urgente: 2, proximo: 3, ok: 4 };
+    const getNum = (name) => { const m = name.match(/^(\d+)/); return m ? parseInt(m[1]) : null; };
+    return [...filtered].sort((a, b) => {
+      if (sortBy === "az") return a.name.localeCompare(b.name, "pt-BR");
+      if (sortBy === "za") return b.name.localeCompare(a.name, "pt-BR");
+      if (sortBy === "num_asc") {
+        const na = getNum(a.name), nb = getNum(b.name);
+        if (na !== null && nb !== null) return na - nb;
+        if (na !== null) return -1; if (nb !== null) return 1;
+        return a.name.localeCompare(b.name, "pt-BR");
+      }
+      if (sortBy === "num_desc") {
+        const na = getNum(a.name), nb = getNum(b.name);
+        if (na !== null && nb !== null) return nb - na;
+        if (na !== null) return 1; if (nb !== null) return -1;
+        return b.name.localeCompare(a.name, "pt-BR");
+      }
+      const pa = prazoInfo(a.prazo); const pb = prazoInfo(b.prazo);
+      const oa = pa ? (levelOrder[pa.level] ?? 5) : 6;
+      const ob = pb ? (levelOrder[pb.level] ?? 5) : 6;
+      if (oa !== ob) return oa - ob;
+      if (a.prazo && b.prazo) return a.prazo.localeCompare(b.prazo);
+      return 0;
+    });
+  }, [tasks, view, filterStatus, filterRec, filterAlert, search, sortBy, filterResp]);
+
+  const stats = useMemo(() => ({
+    total: tasks.length,
+    done:  tasks.filter((t) => t.status === "done").length,
+    in_progress: tasks.filter((t) => t.status === "in_progress").length,
+    pending: tasks.filter((t) => t.status === "pending").length,
+    vencidas: tasks.filter((t) => { const p = prazoInfo(t.prazo); return p && p.level === "vencida" && t.status !== "done"; }).length,
+  }), [tasks]);
+
+  const pct = stats.total ? Math.round((stats.done / stats.total) * 100) : 0;
+  const editTask = tasks.find((t) => t.id === editId);
+  const showListView = view !== "geral" || filterAlert || search || (filterStatus !== "active" && filterStatus !== "all") || filterRec !== "all";
+
+  if (loading) return (
+    <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", minHeight: "100vh", background: "#F8F7F4", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
+      <div style={{ width: 28, height: 28, borderRadius: 6, background: "#1D6FA4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>R</span>
+      </div>
+      <span style={{ fontSize: 13, color: "#888780" }}>Carregando tarefas...</span>
+    </div>
+  );
+
+  return (
+    <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", minHeight: "100vh", background: "#F8F7F4", color: "#2C2C2A" }}>
+
+      {/* HEADER */}
+      <div style={{ background: "#fff", borderBottom: "0.5px solid #D3D1C7", padding: "0 20px", display: "flex", alignItems: "center", gap: 12, height: 54, position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 6, background: "#1D6FA4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>R</span>
+          </div>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>RMR Assessoria Contábil</span>
+          <span style={{ color: "#888780", fontSize: 12 }}>— Gestão de Tarefas</span>
+          {syncing && <span style={{ fontSize: 11, color: "#185FA5", background: "#E6F1FB", borderRadius: 4, padding: "2px 8px" }}>salvando...</span>}
+          {dbError && <span style={{ fontSize: 11, color: "#A32D2D", background: "#FCEBEB", borderRadius: 4, padding: "2px 8px" }}>offline</span>}
+          {!dbError && !realtimeOk && <span style={{ fontSize: 11, color: "#854F0B", background: "#FAEEDA", borderRadius: 4, padding: "2px 8px" }}>⚠ sem sync ao vivo</span>}
+        </div>
+
+        {alertCount > 0 && (
+          <div onClick={() => { setView("geral"); setFilterAlert(true); }}
+            style={{ display: "flex", alignItems: "center", gap: 5, background: "#FCEBEB", border: "0.5px solid #F09595", borderRadius: 20, padding: "3px 10px", cursor: "pointer" }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#A32D2D", display: "inline-block" }} />
+            <span style={{ fontSize: 12, color: "#A32D2D", fontWeight: 500 }}>{alertCount} alerta{alertCount > 1 ? "s" : ""} de prazo</span>
+          </div>
+        )}
+
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          <input placeholder="Buscar por tarefa ou cliente..." value={search} onChange={(e) => setSearch(e.target.value)}
+            style={{ border: "0.5px solid #D3D1C7", borderRadius: 6, padding: "5px 10px", fontSize: 12, width: 220, background: "#F8F7F4", color: "#2C2C2A" }} />
+          <button onClick={() => exportarPDF(visibleTasks)}
+            style={{ background: "#fff", color: "#5F5E5A", border: "0.5px solid #D3D1C7", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+            ↓ Exportar PDF
+          </button>
+          <button onClick={() => setNewTaskModal(true)}
+            style={{ background: "#1D6FA4", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 500, cursor: "pointer" }}>
+            + Nova Tarefa
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", minHeight: "calc(100vh - 54px)" }}>
+
+        {/* SIDEBAR */}
+        <div style={{ width: 196, background: "#fff", borderRight: "0.5px solid #D3D1C7", padding: "14px 0", flexShrink: 0 }}>
+          <NavItem label="Visão Geral" active={view === "geral" && !filterAlert} count={tasks.length}
+            onClick={() => { setView("geral"); setFilterAlert(false); }} />
+          {alertCount > 0 && (
+            <NavItem label="Alertas de prazo" active={filterAlert} count={alertCount} alertMode
+              onClick={() => { setView("geral"); setFilterAlert(true); }} />
+          )}
+          <div style={{ margin: "12px 14px 5px", fontSize: 10, fontWeight: 600, color: "#888780", textTransform: "uppercase", letterSpacing: "0.7px" }}>Setores</div>
+          {Object.entries(INITIAL_DATA).map(([key, data]) => (
+            <NavItem key={key} label={data.label} active={view === key && !filterAlert}
+              dotColor={data.color} count={tasks.filter((t) => t.setor === key && t.status !== 'done' && (!t.prazo || t.prazo.startsWith(mesAtual()))).length}
+              onClick={() => { setView(key); setFilterAlert(false); }} />
+          ))}
+          <div style={{ margin: "16px 14px 0", borderTop: "0.5px solid #D3D1C7", paddingTop: 14 }}>
+            <div style={{ fontSize: 11, color: "#888780", marginBottom: 5 }}>Progresso geral</div>
+            <div style={{ background: "#F1EFE8", borderRadius: 4, height: 5, overflow: "hidden" }}>
+              <div style={{ background: "#639922", width: `${pct}%`, height: "100%", borderRadius: 4, transition: "width 0.5s" }} />
+            </div>
+            <div style={{ fontSize: 11, color: "#3B6D11", marginTop: 4, fontWeight: 500 }}>{pct}% concluído</div>
+            {stats.vencidas > 0 && (
+              <div style={{ marginTop: 8, fontSize: 11, color: "#A32D2D", background: "#FCEBEB", borderRadius: 5, padding: "4px 8px" }}>
+                {stats.vencidas} tarefa(s) vencida(s)
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* MAIN */}
+        <div style={{ flex: 1, padding: 20, overflow: "auto" }}>
+
+          {/* VISÃO GERAL — CARDS */}
+          {!showListView ? (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 10, marginBottom: 20 }}>
+                {[
+                  { label: "Total",        value: stats.total,       bg: "#F1EFE8", color: "#444441" },
+                  { label: "Pendentes",    value: stats.pending,     bg: "#FAEEDA", color: "#854F0B" },
+                  { label: "Em andamento", value: stats.in_progress, bg: "#E6F1FB", color: "#185FA5" },
+                  { label: "Concluídas",   value: stats.done,        bg: "#EAF3DE", color: "#3B6D11" },
+                  { label: "Vencidas",     value: stats.vencidas,    bg: "#FCEBEB", color: "#A32D2D" },
+                ].map((s) => (
+                  <div key={s.label} style={{ background: s.bg, borderRadius: 8, padding: "10px 14px" }}>
+                    <div style={{ fontSize: 11, color: s.color, opacity: 0.8, marginBottom: 3 }}>{s.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 600, color: s.color }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                {Object.entries(INITIAL_DATA).map(([key, data]) => {
+                  const st   = tasks.filter((t) => t.setor === key);
+                  const done = st.filter((t) => t.status === "done").length;
+                  const pctS = st.length ? Math.round((done / st.length) * 100) : 0;
+                  const alertas = st.filter((t) => {
+                    const p = prazoInfo(t.prazo);
+                    return p && ["vencida","hoje","urgente"].includes(p.level) && t.status !== "done";
+                  }).length;
+                  return (
+                    <div key={key} onClick={() => setView(key)}
+                      style={{ background: "#fff", border: "0.5px solid #D3D1C7", borderRadius: 10, padding: 16, cursor: "pointer" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+                        <div style={{ width: 9, height: 9, borderRadius: "50%", background: data.color }} />
+                        <span style={{ fontWeight: 500, fontSize: 13, color: data.color }}>{data.label}</span>
+                        {alertas > 0 && (
+                          <span style={{ fontSize: 10, background: "#FCEBEB", color: "#A32D2D", borderRadius: 10, padding: "1px 7px" }}>
+                            {alertas} alerta{alertas > 1 ? "s" : ""}
+                          </span>
+                        )}
+                        <span style={{ marginLeft: "auto", fontSize: 11, color: "#888780" }}>{st.filter(t => t.status !== 'done' && (!t.prazo || t.prazo.startsWith(mesAtual()))).length} tarefas</span>
+                      </div>
+                      <div style={{ background: "#F1EFE8", borderRadius: 4, height: 4, overflow: "hidden", marginBottom: 5 }}>
+                        <div style={{ background: data.color, width: `${pctS}%`, height: "100%", borderRadius: 4 }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: "#888780" }}>{done} de {st.length} concluídas ({pctS}%)</div>
+                      <div style={{ marginTop: 9, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {st.slice(0, 4).map((t) => (
+                          <span key={t.id} style={{ fontSize: 10, background: data.bg, color: data.color, borderRadius: 4, padding: "2px 6px" }}>{t.name}</span>
+                        ))}
+                        {st.length > 4 && <span style={{ fontSize: 10, color: "#888780" }}>+{st.length - 4} mais</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* FILTROS */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 14, alignItems: "center" }}>
+                {[["active","Ocultar concluídas"],["all","Todos"],["pending","Pendente"],["in_progress","Em andamento"],["done","Concluída"]].map(([s, label]) => (
+                  <Chip key={s} active={filterStatus === s && !filterAlert} onClick={() => { setFilterStatus(s); setFilterAlert(false); }}>
+                    {label}
+                  </Chip>
+                ))}
+                <div style={{ width: 1, height: 18, background: "#D3D1C7", margin: "0 2px" }} />
+                <Chip active={filterRec === "all"} onClick={() => setFilterRec("all")}>Todas rec.</Chip>
+                {RECORRENCIAS.map((r) => (
+                  <Chip key={r} active={filterRec === r} onClick={() => setFilterRec(r)}>{r}</Chip>
+                ))}
+                <div style={{ width: 1, height: 18, background: "#D3D1C7", margin: "0 2px" }} />
+                <Chip active={filterResp === "all"} onClick={() => setFilterResp("all")}>Todos resp.</Chip>
+                {COLABORADORES.map((r) => (
+                  <Chip key={r} active={filterResp === r} onClick={() => setFilterResp(r)}>{r}</Chip>
+                ))}
+                {filterAlert && (
+                  <Chip active danger onClick={() => setFilterAlert(false)}>Alertas ✕</Chip>
+                )}
+                <span style={{ marginLeft: "auto", fontSize: 11, color: "#888780" }}>{visibleTasks.length} tarefa(s)</span>
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+                  style={{ fontSize: 11, border: "0.5px solid #D3D1C7", borderRadius: 6, padding: "3px 8px", background: "#F8F7F4", color: "#2C2C2A", cursor: "pointer" }}>
+                  <option value="prazo">↕ Por prazo</option>
+                  <option value="num_asc">↑ Nº crescente</option>
+                  <option value="num_desc">↓ Nº decrescente</option>
+                  <option value="az">A → Z</option>
+                  <option value="za">Z → A</option>
+                </select>
+              </div>
+
+              {/* LEGENDA DE RECORRÊNCIAS */}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+                {RECORRENCIAS.map((r) => {
+                  const rc = REC_COLORS[r];
+                  return (
+                    <div key={r} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: rc.color, background: rc.bg, borderRadius: 4, padding: "2px 7px" }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: rc.color }} />
+                      {r}
+                    </div>
+                  );
+                })}
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "#A32D2D", background: "#FCEBEB", borderRadius: 4, padding: "2px 7px" }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#A32D2D" }} />
+                  Vencida
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "#854F0B", background: "#FAEEDA", borderRadius: 4, padding: "2px 7px" }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#854F0B" }} />
+                  Urgente / Hoje
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "#185FA5", background: "#E6F1FB", borderRadius: 4, padding: "2px 7px" }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#185FA5" }} />
+                  Próxima semana
+                </div>
+              </div>
+
+              {/* LISTA */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {visibleTasks.map((task) => (
+                  <TaskRow key={task.id} task={task} updateTask={updateTask} removeTask={removeTask} onEdit={() => setEditId(task.id)} />
+                ))}
+                {visibleTasks.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "40px 0", color: "#888780", fontSize: 13 }}>
+                    {filterAlert ? "Nenhum alerta de prazo ativo." : "Nenhuma tarefa encontrada."}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* MODAL EDITAR */}
+      {editId && editTask && (
+        <Modal onClose={() => setEditId(null)} title="Editar tarefa">
+          <TaskForm task={editTask} onChange={(ch) => updateTask(editId, ch)} />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+            <button onClick={() => setEditId(null)} style={btnPrimary}>Salvar</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* MODAL NOVA TAREFA */}
+      {newTaskModal && (
+        <Modal onClose={() => setNewTaskModal(false)} title="Nova tarefa">
+          <Field label="Nome da tarefa *">
+            <input value={newTask.name} onChange={(e) => setNewTask({ ...newTask, name: e.target.value })}
+              placeholder="Ex: DCTF Mensal" style={inputStyle} />
+          </Field>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Field label="Setor">
+              <select value={newTask.setor} onChange={(e) => setNewTask({ ...newTask, setor: e.target.value })} style={inputStyle}>
+                {Object.entries(INITIAL_DATA).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Recorrência">
+              <select value={newTask.recorrencia} onChange={(e) => setNewTask({ ...newTask, recorrencia: e.target.value })} style={inputStyle}>
+                {RECORRENCIAS.map((r) => <option key={r}>{r}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Field label="Responsável">
+              <select value={newTask.responsavel} onChange={(e) => setNewTask({ ...newTask, responsavel: e.target.value })} style={inputStyle}>
+                <option value="">— Sem responsável —</option>
+                {COLABORADORES.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </Field>
+            <Field label="Prazo">
+              <input type="date" value={newTask.prazo} min={todayISO()}
+                onChange={(e) => setNewTask({ ...newTask, prazo: e.target.value })} style={inputStyle} />
+              {newTask.prazo && (() => {
+                const p = prazoInfo(newTask.prazo);
+                return p ? <div style={{ fontSize: 11, color: p.color, marginTop: 3 }}>{p.label}</div> : null;
+              })()}
+            </Field>
+          </div>
+          <Field label="Competência">
+            <input type="month" value={newTask.competencia} onChange={(e) => setNewTask({ ...newTask, competencia: e.target.value })} style={inputStyle} />
+          </Field>
+          <Field label="Observação">
+            <textarea value={newTask.observacao} onChange={(e) => setNewTask({ ...newTask, observacao: e.target.value })}
+              rows={2} style={{ ...inputStyle, resize: "vertical" }} />
+          </Field>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+            <button onClick={() => setNewTaskModal(false)} style={btnSecondary}>Cancelar</button>
+            <button onClick={addTask} style={btnPrimary}>Adicionar</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── TASK ROW ──────────────────────────────────────────────────────────────────
+function TaskRow({ task, updateTask, removeTask, onEdit }) {
+  const sc   = STATUS_CFG[task.status];
+  const sd   = INITIAL_DATA[task.setor] || { label: task.setor, color: "#888780", bg: "#F1EFE8" };
+  const rc   = REC_COLORS[task.recorrencia] || REC_COLORS["Avulso"];
+  const pi   = prazoInfo(task.prazo);
+  const done = task.status === "done";
+
+  const cycleSt = () => {
+    const cycle = { pending: "in_progress", in_progress: "done", done: "pending" };
+    updateTask(task.id, { status: cycle[task.status] });
+  };
+
+  const borderLeft = pi && !done
+    ? `3px solid ${pi.border}`
+    : "3px solid transparent";
+  const borderColor = pi && pi.level === "vencida" && !done ? "#F09595" : "#D3D1C7";
+
+  return (
+    <div style={{ background: "#fff", border: `0.5px solid ${borderColor}`, borderLeft, borderRadius: 8, padding: "11px 14px", display: "flex", alignItems: "flex-start", gap: 11 }}>
+
+      {/* Círculo de status */}
+      <div onClick={cycleSt} style={{
+        width: 19, height: 19, borderRadius: "50%", border: `2px solid ${sc.border}`,
+        background: done ? sc.border : "transparent", cursor: "pointer", flexShrink: 0,
+        marginTop: 2, display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        {done && <span style={{ color: "#fff", fontSize: 10, fontWeight: 700 }}>✓</span>}
+        {task.status === "in_progress" && <div style={{ width: 7, height: 7, borderRadius: "50%", background: sc.border }} />}
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13, fontWeight: done ? 400 : 500, textDecoration: done ? "line-through" : "none", color: done ? "#888780" : "#2C2C2A" }}>
+            {task.name}
+          </span>
+          <Badge bg={sd.bg} color={sd.color}>{sd.label}</Badge>
+          <Badge bg={rc.bg} color={rc.color}>{task.recorrencia}</Badge>
+          <Badge bg={sc.bg} color={sc.color}>{STATUS[task.status]}</Badge>
+          {task.competencia && <span style={{ fontSize: 10, color: "#888780" }}>{task.competencia}</span>}
+        </div>
+
+        {/* Alerta de prazo */}
+        {pi && !done && (
+          <div style={{ marginTop: 5, display: "inline-flex", alignItems: "center", gap: 5, background: pi.bg, border: `0.5px solid ${pi.border}`, borderRadius: 5, padding: "3px 9px" }}>
+            {pi.level !== "ok" && <span style={{ width: 6, height: 6, borderRadius: "50%", background: pi.color, display: "inline-block", flexShrink: 0 }} />}
+            <span style={{ fontSize: 11, color: pi.color, fontWeight: pi.level !== "ok" ? 500 : 400 }}>{pi.label}</span>
+          </div>
+        )}
+        {done && task.prazo && (
+          <div style={{ marginTop: 4, fontSize: 11, color: "#888780" }}>Prazo: {fmtDate(task.prazo)} — concluída</div>
+        )}
+
+        {task.subtasks && task.subtasks.length > 0 && (
+          <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 3 }}>
+            {task.subtasks.map((s) => (
+              <span key={s} style={{ fontSize: 10, background: "#F1EFE8", color: "#5F5E5A", borderRadius: 3, padding: "1px 6px" }}>{s}</span>
+            ))}
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
+          {task.responsavel && <span style={{ fontSize: 11, color: "#185FA5", background: "#E6F1FB", borderRadius: 4, padding: "1px 7px", fontWeight: 500 }}>{task.responsavel}</span>}
+          {task.observacao   && <span style={{ fontSize: 11, color: "#5F5E5A", fontStyle: "italic" }}>{task.observacao}</span>}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+        <button onClick={onEdit}                style={btnSm("#F1EFE8","#444441")}>Editar</button>
+        <button onClick={() => { if (window.confirm(`Excluir "${task.name}"?`)) removeTask(task.id, task.recorrencia); }} style={btnSm("#FCEBEB","#A32D2D")}>✕</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── TASK FORM ─────────────────────────────────────────────────────────────────
+function TaskForm({ task, onChange }) {
+  const pi = prazoInfo(task.prazo);
+  return (
+    <>
+      <Field label="Nome">
+        <input value={task.name} onChange={(e) => onChange({ name: e.target.value })} style={inputStyle} />
+      </Field>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <Field label="Setor">
+          <select value={task.setor} onChange={(e) => onChange({ setor: e.target.value })} style={inputStyle}>
+            {Object.entries(INITIAL_DATA).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Recorrência">
+          <select value={task.recorrencia} onChange={(e) => onChange({ recorrencia: e.target.value })} style={inputStyle}>
+            {RECORRENCIAS.map((r) => <option key={r}>{r}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <Field label="Responsável">
+          <select value={task.responsavel || ""} onChange={(e) => onChange({ responsavel: e.target.value })} style={inputStyle}>
+            <option value="">— Sem responsável —</option>
+            {COLABORADORES.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </Field>
+        <Field label="Prazo">
+          <input type="date" value={task.prazo || ""} onChange={(e) => onChange({ prazo: e.target.value })} style={inputStyle} />
+          {pi && task.status !== "done" && (
+            <div style={{ fontSize: 11, color: pi.color, marginTop: 3 }}>{pi.label}</div>
+          )}
+        </Field>
+      </div>
+      <Field label="Competência">
+        <input type="month" value={task.competencia || ""} onChange={(e) => onChange({ competencia: e.target.value })} style={inputStyle} />
+      </Field>
+      <Field label="Observação">
+        <textarea value={task.observacao || ""} onChange={(e) => onChange({ observacao: e.target.value })} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+      </Field>
+    </>
+  );
+}
+
+// ─── UI ATOMS ──────────────────────────────────────────────────────────────────
+function NavItem({ label, active, onClick, dotColor, count, alertMode }) {
+  return (
+    <div onClick={onClick} style={{
+      display: "flex", alignItems: "center", gap: 7, padding: "7px 14px", cursor: "pointer",
+      background: active ? (alertMode ? "#FCEBEB" : "#E6F1FB") : "transparent",
+      borderLeft: active ? `2px solid ${alertMode ? "#A32D2D" : "#1D6FA4"}` : "2px solid transparent",
+    }}>
+      {dotColor && <div style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />}
+      {alertMode && !dotColor && <span style={{ fontSize: 12 }}>⚑</span>}
+      <span style={{ fontSize: 12, color: active ? (alertMode ? "#A32D2D" : "#185FA5") : "#444441", fontWeight: active ? 500 : 400, flex: 1 }}>{label}</span>
+      <span style={{ fontSize: 10, background: alertMode ? "#FCEBEB" : "#F1EFE8", color: alertMode ? "#A32D2D" : "#5F5E5A", borderRadius: 10, padding: "1px 6px", border: alertMode ? "0.5px solid #F09595" : "none" }}>{count}</span>
+    </div>
+  );
+}
+
+function Modal({ children, onClose, title }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={onClose}>
+      <div style={{ background: "#fff", borderRadius: 10, padding: 22, width: 480, maxWidth: "92vw", maxHeight: "90vh", overflow: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>{title}</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 17, cursor: "pointer", color: "#888780" }}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={{ marginBottom: 11 }}>
+      <label style={{ display: "block", fontSize: 11, color: "#888780", marginBottom: 4 }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Badge({ bg, color, children }) {
+  return <span style={{ fontSize: 10, background: bg, color, borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap" }}>{children}</span>;
+}
+
+function Chip({ active, onClick, children, danger }) {
+  return (
+    <button onClick={onClick} style={{
+      fontSize: 11, borderRadius: 5, padding: "4px 9px", cursor: "pointer",
+      background: active ? (danger ? "#A32D2D" : "#1D6FA4") : "#fff",
+      color:      active ? "#fff"    : (danger ? "#A32D2D" : "#5F5E5A"),
+      border:     `0.5px solid ${active ? (danger ? "#A32D2D" : "#1D6FA4") : "#D3D1C7"}`,
+      fontWeight: active ? 500 : 400,
+    }}>{children}</button>
+  );
+}
+
+const inputStyle   = { width: "100%", border: "0.5px solid #D3D1C7", borderRadius: 6, padding: "6px 9px", fontSize: 12, background: "#F8F7F4", color: "#2C2C2A", boxSizing: "border-box" };
+const btnPrimary   = { background: "#1D6FA4", color: "#fff", border: "none", borderRadius: 6, padding: "7px 18px", fontSize: 12, fontWeight: 500, cursor: "pointer" };
+const btnSecondary = { background: "#fff", color: "#5F5E5A", border: "0.5px solid #D3D1C7", borderRadius: 6, padding: "7px 16px", fontSize: 12, cursor: "pointer" };
+const btnSm        = (bg, color) => ({ fontSize: 11, background: bg, border: "none", borderRadius: 5, padding: "4px 8px", cursor: "pointer", color });
+
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+
+
+</body></html>
