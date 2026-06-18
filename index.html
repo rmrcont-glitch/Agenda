@@ -518,7 +518,38 @@ function App() {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const { data, error } = await sb.from("tarefas").select("*").order("criado", { ascending: true });
+      // CORREÇÃO CRÍTICA: busca paginada para carregar TODAS as tarefas do banco.
+      // O Supabase retorna no máximo 1000 registros por query — sem paginação,
+      // tarefas novas (que ficam além do offset 1000) nunca aparecem na UI.
+      let loaded_all = [];
+      let from = 0;
+      const PAGE = 1000;
+      let hasMore = true;
+      while (hasMore) {
+        const { data: page, error: pageErr } = await sb.from("tarefas")
+          .select("*")
+          .order("criado", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (pageErr) {
+          // Em caso de erro na paginação, usa o que já carregou
+          if (from === 0) {
+            // Falha na primeira página: trata como erro geral
+            const error = pageErr;
+            const data = null;
+            setDbError(error.message);
+            const saved = localStorage.getItem("rmr_tasks_v8");
+            if (saved) { try { setTasks(JSON.parse(saved)); } catch {} }
+            setLoading(false);
+            return;
+          }
+          break;
+        }
+        if (!page || page.length === 0) { hasMore = false; break; }
+        loaded_all = [...loaded_all, ...page];
+        if (page.length < PAGE) { hasMore = false; } else { from += PAGE; }
+      }
+      const data = loaded_all;
+      const error = null;
       if (error) {
         setDbError(error.message);
         const saved = localStorage.getItem("rmr_tasks_v8");
