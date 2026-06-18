@@ -542,9 +542,9 @@ function App() {
         const loaded = data.map(t => ({ ...t, subtasks: t.subtasks || [] }));
 
         // ── Deduplicação automática (race condition multi-abas) ──
-        // Mantém a tarefa MAIS RECENTE de cada grupo duplicado.
-        // Tarefas criadas por ação humana são sempre mais novas que as geradas
-        // automaticamente por gerarRecorrencias(), portanto nunca são deletadas.
+        // CORREÇÃO: só remove duplicatas REAIS — mesmo setor|nome|competencia E
+        // criadas com menos de 10 segundos de diferença (race condition).
+        // Tarefas com mesmo nome mas criadas em momentos distintos são LEGÍTIMAS e nunca deletadas.
         const grupos = {};
         loaded.forEach(t => {
           const key = `${t.setor}|${t.name}|${t.competencia}`;
@@ -554,12 +554,21 @@ function App() {
         const idsParaDeletar = [];
         Object.values(grupos).forEach(grupo => {
           if (grupo.length <= 1) return;
-          // Ordena do mais recente para o mais antigo e preserva apenas o MAIS RECENTE
+          // Ordena do mais recente para o mais antigo
           grupo.sort((a, b) => (b.criado || "").localeCompare(a.criado || ""));
-          grupo.slice(1).forEach(t => idsParaDeletar.push(t.id));
+          // Só deleta se a diferença de criação entre a mais nova e a mais antiga for < 10s
+          // (indica race condition real, não tarefas diferentes com mesmo nome)
+          const maisNova = new Date(grupo[0].criado || 0).getTime();
+          const maisAntiga = new Date(grupo[grupo.length - 1].criado || 0).getTime();
+          const diffSegundos = (maisNova - maisAntiga) / 1000;
+          if (diffSegundos < 10) {
+            // Race condition real: manter só a mais recente
+            grupo.slice(1).forEach(t => idsParaDeletar.push(t.id));
+          }
+          // Se diff >= 10s: tarefas legítimas com mesmo nome — NÃO deletar
         });
         if (idsParaDeletar.length > 0) {
-          console.log(`[RMR] Removendo ${idsParaDeletar.length} duplicata(s) do banco...`);
+          console.log(`[RMR] Removendo ${idsParaDeletar.length} duplicata(s) real(is) do banco...`);
           for (let i = 0; i < idsParaDeletar.length; i += 100) {
             await sb.from("tarefas").delete().in("id", idsParaDeletar.slice(i, i + 100));
           }
