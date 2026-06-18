@@ -587,17 +587,22 @@ function App() {
         }
 
         // ── Exibe tarefas locais ainda pendentes de sync (offline-first) ──
-        // Garante que o usuário veja suas tarefas mesmo que o Supabase não as tenha ainda.
+        // CORREÇÃO: inclui pendentes que ainda não chegaram ao Supabase,
+        // evitando desaparecimento de tarefas após F5 por race condition de latência.
         try {
-          const pendentesRestantes = lsGetPending();
+          const pendentes = lsGetPending() || [];
           const idsJaCarregados = new Set(limpo.map(t => t.id));
-          pendentesRestantes
-            .filter(t => !idsJaCarregados.has(t.id))
-            .forEach(t => { limpo = [...limpo, t]; });
+          const pendentesRestantes = pendentes.filter(t => !idsJaCarregados.has(t.id));
+          if (pendentesRestantes.length > 0) {
+            console.log(`[RMR] Incluindo ${pendentesRestantes.length} tarefa(s) pendente(s) offline na UI.`);
+            limpo = [...limpo, ...pendentesRestantes];
+          }
         } catch {}
 
-        setTasks(limpo);
+        // CORREÇÃO: atualiza localStorage ANTES de setar estado para evitar
+        // inconsistência entre UI e cache local em caso de re-render rápido
         lsSetTasks(limpo);
+        setTasks(limpo);
         await gerarRecorrencias(limpo);
       }
       setLoading(false);
@@ -722,6 +727,8 @@ function App() {
   // ── CRUD ──
   const updateTask = useCallback(async (id, ch) => {
     setTasks(p => p.map(t => t.id === id ? { ...t, ...ch } : t));
+    // CORREÇÃO: persistir atualização no localStorage para sobreviver ao F5
+    lsSetTasks(tasks.map(t => t.id === id ? { ...t, ...ch } : t));
     setSyncing(true);
     const { error: updateError } = await sb.from("tarefas").update(ch).eq("id", id);
     if (updateError) {
